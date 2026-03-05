@@ -1,0 +1,399 @@
+<!--
+  REFERENCES
+
+  1. AOS (Animate On Scroll) — CSS
+     https://unpkg.com/aos@2.3.4/dist/aos.css
+     MIT License — © 2015 Michał Sajnóg
+     https://github.com/michalsnik/aos
+
+  2. AOS (Animate On Scroll) — JavaScript
+     https://unpkg.com/aos@2.3.4/dist/aos.js
+     MIT License — © 2015 Michał Sajnóg
+     https://github.com/michalsnik/aos
+
+  3. Google Fonts — Meow Script
+     https://fonts.google.com/specimen/Meow+Script
+     Designed by Robert Leuschke
+     Licensed under SIL Open Font License 1.1
+
+  4. Google Fonts — Nunito
+     https://fonts.google.com/specimen/Nunito
+     Designed by Vernon Adams, Cyreal, Jacques Le Bailly
+     Licensed under SIL Open Font License 1.1
+
+  5. smoothstep() easing function
+     https://en.wikipedia.org/wiki/Smoothstep
+     Classic Hermite interpolation from Ken Perlin (1999)
+     Widely used in GLSL shaders and scroll animation
+
+  6. Watering animation visual inspiration
+     https://codepen.io/klangwiedergabe/pen/RxZMdv
+     by klangwiedergabe on CodePen
+
+  7. requestAnimationFrame scroll pattern
+     https://developer.mozilla.org/en-US/docs/Web/API/window/requestAnimationFrame
+     MDN Web Docs — Web standard (W3C)
+-->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Scroll Story • Plant</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/aos@2.3.4/dist/aos.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Meow+Script&family=Nunito:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      :root {
+        --ink: rgba(18, 22, 28, 0.85);
+        --muted: rgba(18, 22, 28, 0.55);
+
+        --can-x: 28;
+        --can-y: 35;
+        --can-w: 220;
+
+        --water-x: 30;
+        --water-y: 36;
+        --water-w: 33;
+        --water-h: 140;
+
+        --leafA-x: 50;
+        --leafA-y: 54;
+        --leafA-w: 40;
+        --leafA-rot: -30;
+
+        --leafB-x: 49;
+        --leafB-y: 50;
+        --leafB-w: 40;
+        --leafB-rot: -50;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: "Nunito", sans-serif;
+        color: var(--ink);
+        overflow-x: hidden;
+      }
+
+      /* Each panel-wrap is 200vh tall so the sticky panel has room to animate */
+      .panel-wrap {
+        height: 200vh;
+        position: relative;
+      }
+
+      /* Sticky panel stays pinned while scroll drives the background animations */
+      .panel {
+        height: 100vh;
+        width: 100vw;
+        position: sticky;
+        top: 0;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        padding: 10vh 6vw;
+        z-index: 2;
+      }
+
+      .copy {
+        max-width: 520px;
+        text-align: left;
+        line-height: 1.5;
+        padding: 22px 28px;
+        border-radius: 22px;
+        background: rgba(255, 251, 240, 0.72);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.07);
+      }
+
+      h1 {
+        margin: 0 0 4px;
+        font-family: "Meow Script", cursive;
+        font-size: clamp(42px, 6vw, 72px);
+        font-weight: 400;
+        line-height: 1.15;
+        letter-spacing: 0.01em;
+        color: rgba(18, 22, 28, 0.82);
+      }
+
+      p {
+        margin: 0;
+        font-family: "Nunito", sans-serif;
+        font-size: clamp(15px, 1.8vw, 19px);
+        font-weight: 600;
+        color: rgba(18, 22, 28, 0.52);
+      }
+
+      /* Background scene behind panels */
+      .scene {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 0;
+        overflow: hidden;
+      }
+
+      .sky {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          180deg,
+          rgb(205, 237, 246),
+          rgb(254, 215, 102)
+        );
+      }
+
+      .ground {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 34vh;
+        background: radial-gradient(
+          80vw 35vh at 50% 100%,
+          rgba(18, 24, 32, 0.1),
+          transparent 65%
+        );
+      }
+
+      .plant {
+        position: absolute;
+        left: 50%;
+        bottom: 4vh;
+        transform: translateX(-50%);
+        width: min(320px, 56vw);
+        height: auto;
+        filter: drop-shadow(0 18px 28px rgba(0, 0, 0, 0.14));
+        z-index: 10;
+      }
+
+      .can {
+        position: absolute;
+        right: calc(var(--can-x) * 1vw);
+        top: calc(var(--can-y) * 1vh);
+        width: calc(var(--can-w) * 1px);
+        height: auto;
+        opacity: 0;
+        transform: translateY(-10px) rotate(0deg);
+        transform-origin: 70% 45%;
+        filter: drop-shadow(0 14px 24px rgba(0, 0, 0, 0.14));
+        will-change: transform, opacity;
+        z-index: 12;
+      }
+
+      .water-group {
+        position: absolute;
+        right: calc(var(--water-x) * 1vw);
+        top: calc(var(--water-y) * 1vh);
+        opacity: 0;
+        transform: rotate(10deg);
+        transform-origin: top right;
+        will-change: opacity;
+        z-index: 11;
+      }
+
+      .water {
+        position: absolute;
+        width: calc(var(--water-w) * 1px);
+        height: calc(var(--water-h) * 1px);
+        border-radius: 999px;
+        background: radial-gradient(
+            circle,
+            rgba(120, 190, 255, 0.65) 0 2px,
+            transparent 3px
+          )
+          0 0 / 18px 14px repeat-y;
+        animation: drip 0.55s linear infinite;
+        filter: blur(0.2px);
+      }
+
+      .water.w1 {
+        right: 135px;
+        top: 120px;
+      }
+      .water.w2 {
+        right: 115px;
+        top: 126px;
+        opacity: 0.85;
+      }
+      .water.w3 {
+        right: 155px;
+        top: 132px;
+        opacity: 0.75;
+      }
+
+      @keyframes drip {
+        from {
+          background-position: 0 0;
+        }
+        to {
+          background-position: 0 14px;
+        }
+      }
+
+      /* Leaves above panels */
+      .leaf-layer {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 4;
+      }
+
+      .leaf {
+        position: absolute;
+        height: auto;
+        transform-origin: 50% 90%;
+        opacity: 0;
+        filter: drop-shadow(0 12px 22px rgba(0, 0, 0, 0.12));
+        will-change: transform, opacity;
+      }
+
+      .leafA {
+        left: calc(var(--leafA-x) * 1%);
+        bottom: calc(var(--leafA-y) * 1vh);
+        width: calc(var(--leafA-w) * 1px);
+        transform: translateX(-50%) rotate(calc(var(--leafA-rot) * 1deg))
+          scale(0);
+      }
+
+      .leafB {
+        left: calc(var(--leafB-x) * 1%);
+        bottom: calc(var(--leafB-y) * 1vh);
+        width: calc(var(--leafB-w) * 1px);
+        transform: translateX(-50%) rotate(calc(var(--leafB-rot) * 1deg))
+          scale(0);
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- Background -->
+    <div class="scene">
+      <div class="sky"></div>
+      <div class="ground"></div>
+
+      <img class="can" id="can" src="watercan.png" alt="" />
+      <div class="water-group" id="waterGroup">
+        <div class="water w1"></div>
+        <div class="water w2"></div>
+        <div class="water w3"></div>
+      </div>
+
+      <img class="plant" src="plant.png" alt="" />
+    </div>
+
+    <!-- Leaves ABOVE everything -->
+    <div class="leaf-layer">
+      <img class="leaf leafA" id="leafA" src="leaf.png" alt="" />
+      <img class="leaf leafB" id="leafB" src="leaf.png" alt="" />
+    </div>
+
+    <!-- Panel 1: intro, plant just standing there -->
+    <div class="panel-wrap">
+      <section class="panel">
+        <div class="copy">
+          <h1 data-aos="fade-up" data-aos-duration="900">hey little guy.</h1>
+          <p data-aos="fade-up" data-aos-duration="900" data-aos-delay="120">
+            still here. still going. so am I.
+          </p>
+        </div>
+      </section>
+    </div>
+
+    <!-- Panel 2: watering can tilts in, water drips -->
+    <div class="panel-wrap">
+      <section class="panel">
+        <div class="copy">
+          <h1 data-aos="fade-up" data-aos-duration="900">here, drink up.</h1>
+          <p data-aos="fade-up" data-aos-duration="900" data-aos-delay="120">
+            small things add up more than you think.
+          </p>
+        </div>
+      </section>
+    </div>
+
+    <!-- Panel 3: leaves scale in -->
+    <div class="panel-wrap" style="height: 350vh">
+      <section class="panel">
+        <div class="copy">
+          <h1 data-aos="fade-up" data-aos-duration="900">look at you go!</h1>
+          <p data-aos="fade-up" data-aos-duration="900" data-aos-delay="120">
+            a whole new leaf. tiny proof that showing up works.
+          </p>
+        </div>
+      </section>
+    </div>
+
+    <script src="https://unpkg.com/aos@2.3.4/dist/aos.js"></script>
+    <script>
+      AOS.init({ once: true, offset: 120 });
+
+      const can = document.getElementById("can");
+      const waterGroup = document.getElementById("waterGroup");
+      const leafA = document.getElementById("leafA");
+      const leafB = document.getElementById("leafB");
+
+      const rotA =
+        getComputedStyle(document.documentElement)
+          .getPropertyValue("--leafA-rot")
+          .trim() || "-30";
+      const rotB =
+        getComputedStyle(document.documentElement)
+          .getPropertyValue("--leafB-rot")
+          .trim() || "-50";
+
+      const clamp = (x, a, b) => Math.min(Math.max(x, a), b);
+
+      // Ease in-out: feels organic, not mechanical
+      function smoothstep(t) {
+        return t * t * (3 - 2 * t);
+      }
+
+      // Panel heights in vh: panel 1 = 200, panel 2 = 200, panel 3 = 350
+      const panelHeights = [200, 200, 350];
+      function sectionT(i) {
+        const vh = window.innerHeight;
+        const start =
+          (panelHeights.slice(0, i).reduce((a, b) => a + b, 0) * vh) / 100;
+        const size = (panelHeights[i] * vh) / 100;
+        return clamp((window.scrollY - start) / size, 0, 1);
+      }
+
+      function render() {
+        const tw = sectionT(1); // panel 2: watering
+        const t3 = sectionT(2); // panel 3: leaves
+
+        // Ease both progress values
+        const ewt = smoothstep(tw);
+        const e3 = smoothstep(t3);
+
+        // Can: fades in through panel 2, fades out entering panel 3
+        const canOp = clamp(ewt, 0, 1) * clamp(1 - e3 * 4, 0, 1);
+        can.style.opacity = canOp;
+        can.style.transform = `translateY(${-10 + 20 * ewt}px) rotate(${-14 * ewt}deg)`;
+        waterGroup.style.opacity = canOp;
+
+        // Leaves: scale + fade in through panel 3
+        const grow = smoothstep(clamp((t3 - 0.1) / 0.85, 0, 1));
+        const leafOp = clamp(grow * 1.1, 0, 1);
+        leafA.style.opacity = leafOp;
+        leafB.style.opacity = leafOp;
+        leafA.style.transform = `translateX(-50%) rotate(${rotA}deg) scale(${grow})`;
+        leafB.style.transform = `translateX(-50%) rotate(${rotB}deg) scale(${grow})`;
+      }
+
+      // RAF loop — reads scrollY every frame, synced to display refresh
+      function loop() {
+        render();
+        requestAnimationFrame(loop);
+      }
+      requestAnimationFrame(loop);
+    </script>
+  </body>
+</html>
